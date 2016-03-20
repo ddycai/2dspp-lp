@@ -1,0 +1,34 @@
+<!doctype html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8" />
+    <title>2D Strip Packing Problem</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+    <link rel="stylesheet" type="text/css" href="index.css">
+  </head>
+  <body>
+    <div id="slider">
+      <div id="trigger" class="handle">
+        <span class="glyphicon glyphicon-chevron-right"></span>
+      </div>
+      <h3>Input</h3>
+      <p>Each line is a new rectangle in the following format <code>w h n</code>
+      where <code>w</code>, <code>h</code> and <code>n</code> are the height,
+      width and count of the rectangle, respectively.</p>
+      <div class="input-container">
+      <textarea rows="20" id="input" class="input-area form-control"></textarea>
+      </div>
+      <div class="clear"></div>
+      <button id="solve-button" class="btn btn-default">Solve</button>
+    </div>
+    <div class="container">
+      <div class="row">
+        <div class="col-md-offset-3 col-md-6">
+          <canvas id="packing" width="550" height="600"></canvas>
+        </div>
+      </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-1.12.0.min.js"></script>
+    <script src="./lib/jquery.slidereveal.js"></script>
+    <script src="bundle.js"></script>
+  </body>
+</html>

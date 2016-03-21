@@ -1,8 +1,10 @@
 var solver = require("javascript-lp-solver");
+const Stack = require("./Stack");
 
 "use strict";
 // ==============
-// Functions for solving the 2DSPP linear program.
+// Functions for solving the 2DSPP linear program and then manipulating the
+// solution.
 // My convention is to use T to denote the list of rectangle objects.
 // ==============
 module.exports = {
@@ -47,9 +49,170 @@ module.exports = {
       });
     }
     return T;
+  },
+
+  /**
+   * Given a packing, converts the packing into a list of stacks.
+   */
+  fractionalStacks: (T, packing) => {
+    var S = [];
+    for (var i = 0; i < packing.configuration.length; i++) {
+      for (var j = 0; j < packing.configuration[i]; j++) {
+        S.push(new Stack(T[i], packing.height / T[i].height));
+      }
+    }
+    return S;
+  },
+
+  /**
+   * Makes the given list of stacks integral by combining their fractional parts
+   * and then rounding up.
+   */
+  makeIntegralRoundUp: makeIntegralRoundUp,
+
+  /**
+   * Makes the given list of stacks with fractional parts cut at the cutting 
+   * line integral by rounding down until they are integral.
+   * Returns the number of fractional parts of each rectangle that were removed.
+   */
+  makeIntegralRoundDown: makeIntegralRoundDown,
+
+  /**
+   * Gets the fractional part of the given double.
+   */
+  fractionalPart: fractionalPart,
+  triangleMethod: triangleMethod
+}
+
+// =========
+// Packing Manipulation Functions
+// =========
+
+function fractionalPart(f) {
+  return f - Math.floor(f);
+}
+
+/**
+ * Makes the given list of stacks integral by combining their fractional parts
+ * and then rounding up.
+ */
+function makeIntegralRoundUp(T, S) {
+  // Analyze the total amount of fractional parts of each type
+  var fractions = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf,0);
+  for (var i = 0; i < S.length; i++) {
+    fractions[S[i].rect.id] += S[i].fraction;
+  }
+  // Round all the fractional parts up
+  fractions = fractions.map(Math.ceil);
+
+  // Round up as many stacks as is allowed
+  for (var i = 0; i < S.length; i++) {
+    if (fractions[S[i].rect.id] > 0) {
+      S[i].roundUp();
+      fractions[S[i].rect.id]--;
+    } else {
+      S[i].roundDown();
+    }
   }
 }
 
+/**
+ * Makes the given list of stacks with fractional parts cut at the cutting 
+ * line integral by rounding down until they are integral.
+ * Returns the number of fractional parts of each rectangle that were removed.
+ */
+function makeIntegralRoundDown(T, S) {
+  // Analyze the total amount of fractional parts of each type
+  var fractions = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf,0);
+  for (var i = 0; i < S.length; i++) {
+    fractions[S[i].rect.id] += S[i].fraction;
+  }
+  // Round all the fractional parts down and store them.
+  var removedFractions = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf,0);
+  for (var i = 0; i < S.length; i++) {
+    removedFractions[i] = fractionalPart(fractions[i]);
+    fractions[i] = Math.floor(fractions[i]);
+  }
+
+  var result = [];
+  // Round up as many stacks as is allowed
+  for (var i = 0; i < S.length; i++) {
+    if (fractions[S[i].rect.id] > 0) {
+      S[i].roundUp();
+      fractions[S[i].rect.id]--;
+    } else {
+      S[i].roundDown();
+    }
+    if (S[i].count > 0) {
+      result.push(S[i]);
+    }
+  }
+  return removedFractions;
+}
+
+function partition(T, stack, common) {
+  var count = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf,0);
+  var S1 = [];
+  var S2 = [];
+  for (var i = 0; i < stack.length; i++) {
+    var id = stack[i].rect.id;
+    if (count[id] < common[id]) {
+      S1.push(stack[i]);
+      count[id]++;
+    } else {
+      S2.push(stack[i])
+    }
+  }
+  return {S1: S1, S2: S2};
+}
+
+function triangleMethod(T, stack1, stack2) {
+  // Step 1: combine the common rectangles
+  // frequency count of types of rectangles in stacks
+  var count1 = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf,0);
+  var count2 = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf,0);
+  for (var i = 0; i < stack1.length; i++) {
+    count1[stack1[i].rect.id]++;
+  }
+  for (var i = 0; i < stack2.length; i++) {
+    count2[stack2[i].rect.id]++;
+  }
+  // Get the number of rectangles which are common between them.
+  var common = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf,0);
+  for (var i = 0; i < T.length; i++) {
+    common[i] = Math.min(count1[i], count2[i]);
+  }
+  //console.log(common);
+  var C1 = partition(T, stack1, common);
+  var C2 = partition(T, stack2, common);
+  //console.log(C1.S1);
+  //console.log(C2.S1);
+  // Round down S1 in C2 and round up S1 in C1
+  for (var i = 0; i < C1.S1.length; i++) {
+    var fraction = C2.S1[i].roundDown();
+    C1.S1[i].addHeight(fraction);
+  }
+  makeIntegralRoundUp(T, C1.S1);
+  makeIntegralRoundDown(T, C1.S2);
+  makeIntegralRoundDown(T, C2.S2);
+  // Remove stacks with count of zero.
+  var emptyStackFilter = (x) => {return (x.count > 0)};
+  C1.S1 = C1.S1.filter(emptyStackFilter);
+  C1.S2 = C1.S2.filter(emptyStackFilter);
+  C2.S1 = C2.S1.filter(emptyStackFilter);
+  C2.S2 = C2.S2.filter(emptyStackFilter);
+  // Step 2: round down until the rectangles are integral
+
+  //TODO: finish the rest of the this function
+  return {
+    C1: C1.S1.concat(C1.S2),
+    C2: C2.S1.concat(C2.S2)
+  };
+}
+
+// ========
+// Linear program solver functions
+// ========
 
 /**
  * Generates all possible configurations given a list of rectangles T.

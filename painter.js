@@ -1,3 +1,6 @@
+const packer = require('./packer');
+const Stack = require('./Stack');
+
 "use strict";
 
 module.exports = {
@@ -21,7 +24,7 @@ module.exports = {
     // First pass, get all the configuration stacks
     var stacks = [];
     for (var i = 0; i < packing.length; i++) {
-      var stack = fractionalStacks(rects, packing[i]);
+      var stack = packer.fractionalStacks(rects, packing[i]);
       stacks.push(stack);
     }
 
@@ -29,7 +32,7 @@ module.exports = {
     if (stage > 1) {
       var stack1 = stacks.pop();
       var stack2 = stacks.pop();
-      var pair = triangleMethod(rects, stack1, stack2);
+      var pair = packer.triangleMethod(rects, stack1, stack2);
       stacks.push(pair.C1);
       stacks.push(pair.C2);
       console.log("pair...");
@@ -41,7 +44,7 @@ module.exports = {
     var currentHeight = 0;
     for (var i = 0; i < stacks.length; i++) {
       if (stage > 0) {
-        makeIntegralRoundUp(rects, stacks[i]);
+        packer.makeIntegralRoundUp(rects, stacks[i]);
       }
       var coords = stackCoordinates(stacks[i], currentHeight);
       coordsList.push(coords);
@@ -121,202 +124,6 @@ function drawConfiguration(context, coords, currentHeight, options) {
       configurationHeight * height
   );
   return configurationHeight;
-}
-
-/**
- * Represents a stack of rectangles of the same type one on top of another.
- */
-class Stack {
-  constructor(rect, count) {
-    this._rect = rect;
-    this._count = count;
-  }
-
-  get rect() {
-    return this._rect;
-  }
-
-  /**
-   * Gets the (potentially fractional) number of rectangles in this stack.
-   */
-  get count() {
-    return this._count;
-  }
-
-  /**
-   * Gets the fractional part of the rectangle residing at the top (if any).
-   */
-  get fraction() {
-    return fractionalPart(this._count);
-  }
-
-  /**
-   * Gets the number of whole rectangles.
-   */
-  get wholeRectangles() {
-    return Math.floor(this._count);
-  }
-
-  addHeight(amount) {
-    this._count += amount;
-  }
-
-  /**
-   * Rounds this stack up.
-   */
-  roundUp() {
-    this._count = Math.ceil(this._count);
-  }
-
-  /**
-   * Rounds this stack down and returns the fractional part that is rounded
-   * away.
-   */
-  roundDown() {
-    var f = this.fraction;
-    this._count = Math.floor(this._count);
-    return f;
-  }
-}
-
-/**
- * Gets the fractional part of the given double.
- */
-function fractionalPart(f) {
-  return f - Math.floor(f);
-}
-
-/**
- * Makes the given list of stacks integral by combining their fractional parts.
- */
-function makeIntegralRoundUp(T, S) {
-  // Analyze the total amount of fractional parts of each type
-  var fractions = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf,0);
-  for (var i = 0; i < S.length; i++) {
-    fractions[S[i].rect.id] += S[i].fraction;
-  }
-  // Round all the fractional parts up
-  fractions = fractions.map(Math.ceil);
-
-  // Round up as many stacks as is allowed
-  for (var i = 0; i < S.length; i++) {
-    if (fractions[S[i].rect.id] > 0) {
-      S[i].roundUp();
-      fractions[S[i].rect.id]--;
-    } else {
-      S[i].roundDown();
-    }
-  }
-}
-
-/**
- * Makes the given list of stacks with fractional parts cut at the cutting 
- * line integral by rounding down until they are integral.
- * Returns the number of fractional parts of each rectangle that were removed.
- */
-function makeIntegralRoundDown(T, S) {
-  // Analyze the total amount of fractional parts of each type
-  var fractions = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf,0);
-  for (var i = 0; i < S.length; i++) {
-    fractions[S[i].rect.id] += S[i].fraction;
-  }
-  // Round all the fractional parts down and store them.
-  var removedFractions = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf,0);
-  for (var i = 0; i < S.length; i++) {
-    removedFractions[i] = fractionalPart(fractions[i]);
-    fractions[i] = Math.floor(fractions[i]);
-  }
-
-  var result = [];
-  // Round up as many stacks as is allowed
-  for (var i = 0; i < S.length; i++) {
-    if (fractions[S[i].rect.id] > 0) {
-      S[i].roundUp();
-      fractions[S[i].rect.id]--;
-    } else {
-      S[i].roundDown();
-    }
-    if (S[i].count > 0) {
-      result.push(S[i]);
-    }
-  }
-  return removedFractions;
-}
-
-function partition(T, stack, common) {
-  var count = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf,0);
-  var S1 = [];
-  var S2 = [];
-  for (var i = 0; i < stack.length; i++) {
-    var id = stack[i].rect.id;
-    if (count[id] < common[id]) {
-      S1.push(stack[i]);
-      count[id]++;
-    } else {
-      S2.push(stack[i])
-    }
-  }
-  return {S1: S1, S2: S2};
-}
-
-function triangleMethod(T, stack1, stack2) {
-  // Step 1: combine the common rectangles
-  // frequency count of types of rectangles in stacks
-  var count1 = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf,0);
-  var count2 = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf,0);
-  for (var i = 0; i < stack1.length; i++) {
-    count1[stack1[i].rect.id]++;
-  }
-  for (var i = 0; i < stack2.length; i++) {
-    count2[stack2[i].rect.id]++;
-  }
-  // Get the number of rectangles which are common between them.
-  var common = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf,0);
-  for (var i = 0; i < T.length; i++) {
-    common[i] = Math.min(count1[i], count2[i]);
-  }
-  //console.log(common);
-  var C1 = partition(T, stack1, common);
-  var C2 = partition(T, stack2, common);
-  //console.log(C1.S1);
-  //console.log(C2.S1);
-  // Round down S1 in C2 and round up S1 in C1
-  for (var i = 0; i < C1.S1.length; i++) {
-    var fraction = C2.S1[i].roundDown();
-    C1.S1[i].addHeight(fraction);
-  }
-  makeIntegralRoundUp(T, C1.S1);
-  makeIntegralRoundDown(T, C1.S2);
-  makeIntegralRoundDown(T, C2.S2);
-  // Remove stacks with count of zero.
-  var emptyStackFilter = (x) => {return (x.count > 0)};
-  C1.S1 = C1.S1.filter(emptyStackFilter);
-  C1.S2 = C1.S2.filter(emptyStackFilter);
-  C2.S1 = C2.S1.filter(emptyStackFilter);
-  C2.S2 = C2.S2.filter(emptyStackFilter);
-  // Step 2: round down until the rectangles are integral
-
-  //TODO: finish the rest of the this function
-  return {
-    C1: C1.S1.concat(C1.S2),
-    C2: C2.S1.concat(C2.S2)
-  };
-}
-
-function fractionalStacks(T, packing) {
-  var S = [];
-  for (var i = 0; i < packing.configuration.length; i++) {
-    for (var j = 0; j < packing.configuration[i]; j++) {
-      S.push(new Stack(T[i], packing.height / T[i].height));
-    }
-  }
-  return S;
-}
-
-function roundedUpStacks(T, packing) {
-  var S = fractionalStacks(T, packing);
-  makeIntegralRoundUp(T, S);
-  return S;
 }
 
 /**

@@ -109,7 +109,7 @@
 	  console.log(result.packing);
 	  var canvas = document.getElementById("packing");
 	  var info = painter.drawPacking(rects, result, canvas, 0, config);
-	  var $info = $('#info ul');
+	  var $info = $('#info ul').empty();
 	  info.heights.reverse();
 	  for (var i = 0; i < info.heights.length; i++) {
 	    $info.append("<li>Configuration " + (i + 1) + " height: " + info.heights[i] + "</li>");
@@ -303,7 +303,7 @@
 /* 2 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var require;var require;var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;"use strict";
+	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;var require;var require;"use strict";
 
 	var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
 

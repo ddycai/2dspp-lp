@@ -61,7 +61,7 @@ function drawPackingFromString(s) {
   console.log(result.packing);
   var canvas = document.getElementById("packing");
   var info = painter.drawPacking(rects, result, canvas, 0, config);
-  var $info = $('#info ul');
+  var $info = $('#info ul').empty();
   info.heights.reverse();
   for (var i = 0; i < info.heights.length; i++) {
     $info.append(`<li>Configuration ${i + 1} height: ${info.heights[i]}</li>`);

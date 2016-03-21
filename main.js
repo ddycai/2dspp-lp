@@ -5,9 +5,15 @@ var config = {
   rectBorder: '#ffffff',
   rectMaxHeight: 600,
   configBorder: '#FFBC42',
-  configLineWidth: 2
+  configLineWidth: 2,
+  colours: painter.tintGradient("#722364", .15, 10)
 };
 
+/**
+ * Given a string where each line contains the description of a rectangle
+ * (width, height and number of rectangles in that order space separated),
+ * returns a list of rectangle objects.
+ */
 function parseRectangles(s) {
   var tokens = s.split('\n');
   var result = [];
@@ -36,22 +42,42 @@ function parseRectangles(s) {
   return result;
 }
 
+/**
+ * Draws the packing given the string. Caches the result of solving the linear
+ * program in the following declared variables.
+ */
+var rects, result, stage;
 function drawPackingFromString(s) {
   try {
-    var rects = parseRectangles(s);
+    rects = parseRectangles(s);
   } catch (e) {
     alert(e);
     return;
   }
   console.log(rects);
-  var result = packer.fractionalPacking(rects);
+  stage = 0;
+  result = packer.fractionalPacking(rects);
   console.log("Total height: " + result.totalHeight);
   console.log(result.packing);
   var canvas = document.getElementById("packing");
-  painter.drawPacking(rects, result, canvas, config);
+  var info = painter.drawPacking(rects, result, canvas, 0, config);
+  var $info = $('#info ul');
+  info.heights.reverse();
+  for (var i = 0; i < info.heights.length; i++) {
+    $info.append(`<li>Configuration ${i + 1} height: ${info.heights[i]}</li>`);
+  }
 }
 
-var defSolution = ".5 .5 2\n.333 .333 3\n.25 .25 2";
+/**
+ * Go to the next stage in the packing sequence.
+ */
+function continuePackingSequence() {
+  stage++;
+  var canvas = document.getElementById("packing");
+  painter.drawPacking(rects, result, canvas, stage, config);
+}
+
+var defSolution = ".5 .5 3\n.333 .333 2\n.25 .25 2";
 
 $(function() {
   $('#input').val(defSolution);
@@ -60,6 +86,10 @@ $(function() {
     var s = $('#input').val();
     console.log(s);
     drawPackingFromString(s);
+  });
+
+  $('#continue-button').click(function (){
+    continuePackingSequence();
   });
 
   var slider = $("#slider").slideReveal({

@@ -53,9 +53,15 @@
 	  rectBorder: '#ffffff',
 	  rectMaxHeight: 600,
 	  configBorder: '#FFBC42',
-	  configLineWidth: 2
+	  configLineWidth: 2,
+	  colours: painter.tintGradient("#722364", .15, 10)
 	};
 
+	/**
+	 * Given a string where each line contains the description of a rectangle
+	 * (width, height and number of rectangles in that order space separated),
+	 * returns a list of rectangle objects.
+	 */
 	function parseRectangles(s) {
 	  var tokens = s.split('\n');
 	  var result = [];
@@ -84,22 +90,42 @@
 	  return result;
 	}
 
+	/**
+	 * Draws the packing given the string. Caches the result of solving the linear
+	 * program in the following declared variables.
+	 */
+	var rects, result, stage;
 	function drawPackingFromString(s) {
 	  try {
-	    var rects = parseRectangles(s);
+	    rects = parseRectangles(s);
 	  } catch (e) {
 	    alert(e);
 	    return;
 	  }
 	  console.log(rects);
-	  var result = packer.fractionalPacking(rects);
+	  stage = 0;
+	  result = packer.fractionalPacking(rects);
 	  console.log("Total height: " + result.totalHeight);
 	  console.log(result.packing);
 	  var canvas = document.getElementById("packing");
-	  painter.drawPacking(rects, result, canvas, config);
+	  var info = painter.drawPacking(rects, result, canvas, 0, config);
+	  var $info = $('#info ul');
+	  info.heights.reverse();
+	  for (var i = 0; i < info.heights.length; i++) {
+	    $info.append("<li>Configuration " + (i + 1) + " height: " + info.heights[i] + "</li>");
+	  }
 	}
 
-	var defSolution = ".5 .5 2\n.333 .333 3\n.25 .25 2";
+	/**
+	 * Go to the next stage in the packing sequence.
+	 */
+	function continuePackingSequence() {
+	  stage++;
+	  var canvas = document.getElementById("packing");
+	  painter.drawPacking(rects, result, canvas, stage, config);
+	}
+
+	var defSolution = ".5 .5 3\n.333 .333 2\n.25 .25 2";
 
 	$(function () {
 	  $('#input').val(defSolution);
@@ -108,6 +134,10 @@
 	    var s = $('#input').val();
 	    console.log(s);
 	    drawPackingFromString(s);
+	  });
+
+	  $('#continue-button').click(function () {
+	    continuePackingSequence();
 	  });
 
 	  var slider = $("#slider").slideReveal({
@@ -136,11 +166,12 @@
 	"use strict";
 	// ==============
 	// Functions for solving the 2DSPP linear program.
+	// My convention is to use T to denote the list of rectangle objects.
 	// ==============
 	module.exports = {
 	  /**
 	   * Solves the fractional rectangle packing problem and returns the solution.
-	   * T - a list of rectangles (created by toRectangles())
+	   * T - a list of rectangles objects
 	   */
 	  fractionalPacking: function fractionalPacking(T) {
 	    var configurations = generateConfigurations(T);
@@ -205,7 +236,8 @@
 	      c[i]--;
 	    }
 	  }
-	  // No more rectangles can fit so add this as a configuration.
+	  // If any rectangles have been used (capacity < 1) then add this as a valid
+	  // configuration.
 	  if (capacity < 1 /*isLeaf*/) {
 	      configurations.push(c.slice());
 	    }
@@ -214,6 +246,8 @@
 	/**
 	 * Builds a linear program to solve the fractional rectangle problem given the
 	 * list of rectangles.
+	 * Optionally accepts a set of configurations but will generate them itself if
+	 * not given.
 	 */
 	function buildLinearProgram(T, configurations) {
 	  if (typeof configurations === 'undefined') {
@@ -244,6 +278,12 @@
 	  return model;
 	}
 
+	/**
+	 * Given a linear program model and a list of configurations, solves the linear
+	 * program and returns an object consisting of the height of each configuration
+	 * and which configuration it represents. (the corresponding element of
+	 * configurations)
+	 */
 	function solveFractionalPackingLP(model, configurations) {
 	  var solution = solver.Solve(model);
 	  var packing = [];
@@ -263,7 +303,7 @@
 /* 2 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;var require;var require;"use strict";
+	var require;var require;var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;"use strict";
 
 	var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
 
@@ -6314,91 +6354,375 @@
 
 	"use strict";
 
-	module.exports = {
-	  drawPacking: function drawPacking(rects, result, canvas, config) {
-	    // resize the canvas accordingly
-	    var height = config.rectMaxHeight;
-	    canvas.height = height * result.totalHeight + 50;
-	    clearCanvas(canvas);
-	    var width = canvas.width;
+	var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
+	function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+	module.exports = {
+	  /**
+	   * In: rects the list of rectangles, result the result of the linear program,
+	   * canvas the HTML canvas and config a list of options, draws the packing
+	   * specified by result onto the canvas.
+	   */
+	  drawPacking: function drawPacking(rects, result, canvas, stage, options) {
+	    var info = {
+	      heights: [],
+	      configs: []
+	    };
+	    // resize the canvas accordingly and rename variables for better readability
+	    var height = options.rectMaxHeight;
+	    var width = canvas.width;
+	    options.canvasWidth = canvas.width;
 	    var packing = result.packing;
 	    var context = canvas.getContext("2d");
-	    // translates the canvas
+
+	    // First pass, get all the configuration stacks
+	    var stacks = [];
+	    for (var i = 0; i < packing.length; i++) {
+	      var stack = fractionalStacks(rects, packing[i]);
+	      stacks.push(stack);
+	    }
+
+	    // Do triangle method on the last two stacks
+	    if (stage > 1) {
+	      var stack1 = stacks.pop();
+	      var stack2 = stacks.pop();
+	      var pair = triangleMethod(rects, stack1, stack2);
+	      stacks.push(pair.C1);
+	      stacks.push(pair.C2);
+	      console.log("pair...");
+	      console.log(pair);
+	    }
+
+	    // We have to do two passes to get the height of the final packing
+	    var coordsList = [];
+	    var currentHeight = 0;
+	    for (var i = 0; i < stacks.length; i++) {
+	      if (stage > 0) {
+	        makeIntegralRoundUp(rects, stacks[i]);
+	      }
+	      var coords = stackCoordinates(stacks[i], currentHeight);
+	      coordsList.push(coords);
+	      var configurationHeight = 0;
+	      for (var j = 0; j < coords.length; j++) {
+	        var h = coords[j].y2 - coords[j].y1;
+	        configurationHeight = Math.max(configurationHeight, coords[j].y2 - currentHeight);
+	      }
+	      currentHeight += configurationHeight;
+	    }
+
+	    // Set the height of the canvas
+	    canvas.height = height * currentHeight + 50;
+	    // Flip the canvas
 	    context.translate(0, canvas.height);
 	    context.scale(1, -1);
-	    var yh = 0;
-	    for (var i = 0; i < packing.length; i++) {
-	      var S = crossSection(rects, packing[i].configuration);
-	      var coords = drawCrossSection(S, packing[i].height, yh);
-	      console.log(coords);
-	      for (var j = 0; j < coords.length; j++) {
-	        //var context = canvas.getContext('2d');
-	        var h = coords[j].y2 - coords[j].y1;
-	        var w = coords[j].x2 - coords[j].x1;
-	        context.lineWidth = 1;
-	        context.strokeStyle = config.rectBorder;
-	        console.log(coords[j].id);
-	        context.fillStyle = colours[coords[j].id % colours.length];
-	        context.fillRect(coords[j].x1 * width, coords[j].y1 * height, w * width, h * height);
-	        context.strokeRect(coords[j].x1 * width, coords[j].y1 * height, w * width, h * height);
-	      }
-	      context.lineWidth = config.configLineWidth;
-	      context.strokeStyle = config.configBorder;
-	      context.strokeRect(0, yh * height, width, yh + height * packing[i].height);
-	      yh += packing[i].height;
+
+	    currentHeight = 0;
+	    for (var i = 0; i < coordsList.length; i++) {
+	      var coords = coordsList[i];
+	      var configurationHeight = drawConfiguration(context, coords, currentHeight, options);
+	      info.heights.push(configurationHeight);
+	      currentHeight += configurationHeight;
 	    }
+	    return info;
+	  },
+
+	  /**
+	   * Returns a gradient of lighter colours given an initial shade.
+	   */
+	  tintGradient: function tintGradient(hex, tintFactor, iterations) {
+	    var colours = [];
+	    var rgb = hexToRgb(hex);
+	    //var rgb = hexToRgb("#D81159");
+	    for (var i = 0; i < iterations; i++) {
+	      colours.push(rgbToHex(rgb));
+	      rgb = tint(rgb, tintFactor);
+	    }
+	    return colours;
 	  }
 	};
 
-	var colours = [];
-
-	var rgb = hexToRgb("#722364");
-	//var rgb = hexToRgb("#D81159");
-	for (var i = 0; i < 10; i++) {
-	  colours.push(rgbToHex(rgb));
-	  rgb = tint(rgb, 0.15);
+	function drawConfiguration(context, coords, currentHeight, options) {
+	  var configurationHeight = 0;
+	  var height = options.rectMaxHeight;
+	  var width = options.canvasWidth;
+	  //console.log(coords);
+	  for (var j = 0; j < coords.length; j++) {
+	    //var context = canvas.getContext('2d');
+	    var h = coords[j].y2 - coords[j].y1;
+	    var w = coords[j].x2 - coords[j].x1;
+	    context.lineWidth = 1;
+	    context.strokeStyle = options.rectBorder;
+	    //console.log(coords[j].id);
+	    context.fillStyle = options.colours[coords[j].id % options.colours.length];
+	    context.fillRect(coords[j].x1 * width, coords[j].y1 * height, w * width, h * height);
+	    context.strokeRect(coords[j].x1 * width, coords[j].y1 * height, w * width, h * height);
+	    configurationHeight = Math.max(configurationHeight, coords[j].y2 - currentHeight);
+	  }
+	  //console.log(i + ": " + configurationHeight);
+	  context.lineWidth = options.configLineWidth;
+	  context.strokeStyle = options.configBorder;
+	  context.strokeRect(0, currentHeight * height, width, configurationHeight * height);
+	  return configurationHeight;
 	}
 
 	/**
-	 * Converts the given configuration into a cross section.
-	 *
-	 * A cross section is the multiset of rectangles when a horizontal line is
-	 * drawn along any point in the configuration.
+	 * Represents a stack of rectangles of the same type one on top of another.
 	 */
-	function crossSection(T, C) {
+
+	var Stack = function () {
+	  function Stack(rect, count) {
+	    _classCallCheck(this, Stack);
+
+	    this._rect = rect;
+	    this._count = count;
+	  }
+
+	  _createClass(Stack, [{
+	    key: "addHeight",
+	    value: function addHeight(amount) {
+	      this._count += amount;
+	    }
+
+	    /**
+	     * Rounds this stack up.
+	     */
+
+	  }, {
+	    key: "roundUp",
+	    value: function roundUp() {
+	      this._count = Math.ceil(this._count);
+	    }
+
+	    /**
+	     * Rounds this stack down and returns the fractional part that is rounded
+	     * away.
+	     */
+
+	  }, {
+	    key: "roundDown",
+	    value: function roundDown() {
+	      var f = this.fraction;
+	      this._count = Math.floor(this._count);
+	      return f;
+	    }
+	  }, {
+	    key: "rect",
+	    get: function get() {
+	      return this._rect;
+	    }
+
+	    /**
+	     * Gets the (potentially fractional) number of rectangles in this stack.
+	     */
+
+	  }, {
+	    key: "count",
+	    get: function get() {
+	      return this._count;
+	    }
+
+	    /**
+	     * Gets the fractional part of the rectangle residing at the top (if any).
+	     */
+
+	  }, {
+	    key: "fraction",
+	    get: function get() {
+	      return fractionalPart(this._count);
+	    }
+
+	    /**
+	     * Gets the number of whole rectangles.
+	     */
+
+	  }, {
+	    key: "wholeRectangles",
+	    get: function get() {
+	      return Math.floor(this._count);
+	    }
+	  }]);
+
+	  return Stack;
+	}();
+
+	/**
+	 * Gets the fractional part of the given double.
+	 */
+
+
+	function fractionalPart(f) {
+	  return f - Math.floor(f);
+	}
+
+	/**
+	 * Makes the given list of stacks integral by combining their fractional parts.
+	 */
+	function makeIntegralRoundUp(T, S) {
+	  // Analyze the total amount of fractional parts of each type
+	  var fractions = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf, 0);
+	  for (var i = 0; i < S.length; i++) {
+	    fractions[S[i].rect.id] += S[i].fraction;
+	  }
+	  // Round all the fractional parts up
+	  fractions = fractions.map(Math.ceil);
+
+	  // Round up as many stacks as is allowed
+	  for (var i = 0; i < S.length; i++) {
+	    if (fractions[S[i].rect.id] > 0) {
+	      S[i].roundUp();
+	      fractions[S[i].rect.id]--;
+	    } else {
+	      S[i].roundDown();
+	    }
+	  }
+	}
+
+	/**
+	 * Makes the given list of stacks with fractional parts cut at the cutting 
+	 * line integral by rounding down until they are integral.
+	 * Returns the number of fractional parts of each rectangle that were removed.
+	 */
+	function makeIntegralRoundDown(T, S) {
+	  // Analyze the total amount of fractional parts of each type
+	  var fractions = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf, 0);
+	  for (var i = 0; i < S.length; i++) {
+	    fractions[S[i].rect.id] += S[i].fraction;
+	  }
+	  // Round all the fractional parts down and store them.
+	  var removedFractions = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf, 0);
+	  for (var i = 0; i < S.length; i++) {
+	    removedFractions[i] = fractionalPart(fractions[i]);
+	    fractions[i] = Math.floor(fractions[i]);
+	  }
+
+	  var result = [];
+	  // Round up as many stacks as is allowed
+	  for (var i = 0; i < S.length; i++) {
+	    if (fractions[S[i].rect.id] > 0) {
+	      S[i].roundUp();
+	      fractions[S[i].rect.id]--;
+	    } else {
+	      S[i].roundDown();
+	    }
+	    if (S[i].count > 0) {
+	      result.push(S[i]);
+	    }
+	  }
+	  return removedFractions;
+	}
+
+	function partition(T, stack, common) {
+	  var count = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf, 0);
+	  var S1 = [];
+	  var S2 = [];
+	  for (var i = 0; i < stack.length; i++) {
+	    var id = stack[i].rect.id;
+	    if (count[id] < common[id]) {
+	      S1.push(stack[i]);
+	      count[id]++;
+	    } else {
+	      S2.push(stack[i]);
+	    }
+	  }
+	  return { S1: S1, S2: S2 };
+	}
+
+	function triangleMethod(T, stack1, stack2) {
+	  // Step 1: combine the common rectangles
+	  // frequency count of types of rectangles in stacks
+	  var count1 = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf, 0);
+	  var count2 = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf, 0);
+	  for (var i = 0; i < stack1.length; i++) {
+	    count1[stack1[i].rect.id]++;
+	  }
+	  for (var i = 0; i < stack2.length; i++) {
+	    count2[stack2[i].rect.id]++;
+	  }
+	  // Get the number of rectangles which are common between them.
+	  var common = Array.apply(null, Array(T.length)).map(Number.prototype.valueOf, 0);
+	  for (var i = 0; i < T.length; i++) {
+	    common[i] = Math.min(count1[i], count2[i]);
+	  }
+	  //console.log(common);
+	  var C1 = partition(T, stack1, common);
+	  var C2 = partition(T, stack2, common);
+	  //console.log(C1.S1);
+	  //console.log(C2.S1);
+	  // Round down S1 in C2 and round up S1 in C1
+	  for (var i = 0; i < C1.S1.length; i++) {
+	    var fraction = C2.S1[i].roundDown();
+	    C1.S1[i].addHeight(fraction);
+	  }
+	  makeIntegralRoundUp(T, C1.S1);
+	  makeIntegralRoundDown(T, C1.S2);
+	  makeIntegralRoundDown(T, C2.S2);
+	  // Remove stacks with count of zero.
+	  var emptyStackFilter = function emptyStackFilter(x) {
+	    return x.count > 0;
+	  };
+	  C1.S1 = C1.S1.filter(emptyStackFilter);
+	  C1.S2 = C1.S2.filter(emptyStackFilter);
+	  C2.S1 = C2.S1.filter(emptyStackFilter);
+	  C2.S2 = C2.S2.filter(emptyStackFilter);
+	  // Step 2: round down until the rectangles are integral
+
+	  //TODO: finish the rest of the this function
+	  return {
+	    C1: C1.S1.concat(C1.S2),
+	    C2: C2.S1.concat(C2.S2)
+	  };
+	}
+
+	function fractionalStacks(T, packing) {
 	  var S = [];
-	  for (var i = 0; i < C.length; i++) {
-	    for (var j = 0; j < C[i]; j++) {
-	      S.push(T[i]);
+	  for (var i = 0; i < packing.configuration.length; i++) {
+	    for (var j = 0; j < packing.configuration[i]; j++) {
+	      S.push(new Stack(T[i], packing.height / T[i].height));
 	    }
 	  }
 	  return S;
 	}
 
+	function roundedUpStacks(T, packing) {
+	  var S = fractionalStacks(T, packing);
+	  makeIntegralRoundUp(T, S);
+	  return S;
+	}
+
 	/**
-	 * Returns the coordinates of all the rectangles in the given cross section.
-	 * S - the cross section
-	 * height - the height of the cross section
-	 * offset - the offset of the configuration
+	 * Given some rectangle stacks, calculates the coordinates for each rectangle
+	 * and returns them as a list of coord objects. Each coord object has the id for
+	 * the rectangle object and the coordinates of the bottom left (x1, y1) and the
+	 * top right (x2, y2) corner.
 	 */
-	function drawCrossSection(S, height, offset) {
-	  height = height + offset;
+	function stackCoordinates(stack, offset) {
 	  var coords = [];
 	  var x = 0;
-	  for (var i = 0; i < S.length; i++) {
+	  for (var i = 0; i < stack.length; i++) {
 	    var y = offset;
-	    while (y < height) {
+	    for (var j = 0; j < stack[i].wholeRectangles; j++) {
 	      coords.push({
-	        id: S[i].id,
+	        id: stack[i].rect.id,
 	        x1: x,
 	        y1: y,
-	        x2: x + S[i].width,
-	        y2: Math.min(height, y + S[i].height)
+	        x2: x + stack[i].rect.width,
+	        y2: y + stack[i].rect.height
 	      });
-	      y += S[i].height;
+	      y += stack[i].rect.height;
 	    }
-	    x += S[i].width;
+	    // Draw the fractional rectangle.
+	    var f = stack[i].fraction;
+	    if (f > 0) {
+	      coords.push({
+	        id: stack[i].rect.id,
+	        x1: x,
+	        y1: y,
+	        x2: x + stack[i].rect.width,
+	        y2: y + stack[i].rect.height * f
+	      });
+	    }
+	    x += stack[i].rect.width;
 	  }
 	  return coords;
 	}
@@ -6411,6 +6735,7 @@
 	// ==========
 	// Colour functions
 	// ==========
+
 	function tint(rgb, tint_factor) {
 	  return {
 	    r: rgb.r + Math.round((255 - rgb.r) * tint_factor),

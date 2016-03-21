@@ -10,20 +10,27 @@
       <div id="trigger" class="handle">
         <span class="glyphicon glyphicon-chevron-right"></span>
       </div>
+      <p><code>ESC</code> to close</p>
       <h3>Input</h3>
       <p>Each line is a new rectangle in the following format <code>w h n</code>
-      where <code>w</code>, <code>h</code> and <code>n</code> are the height,
-      width and count of the rectangle, respectively.</p>
+      where <code>w</code>, <code>h</code> and <code>n</code> are the width,
+      height and count of the rectangle, respectively.</p>
       <div class="input-container">
       <textarea rows="20" id="input" class="input-area form-control"></textarea>
       </div>
       <div class="clear"></div>
       <button id="solve-button" class="btn btn-default">Solve</button>
+      <button id="continue-button" class="btn btn-default">Continue</button>
     </div>
     <div class="container">
       <div class="row">
         <div class="col-md-offset-3 col-md-6">
           <canvas id="packing" width="550" height="600"></canvas>
+        </div>
+        <div id="info">
+          <div id="console">
+            <ul></ul>
+          </div>
         </div>
       </div>
     </div>

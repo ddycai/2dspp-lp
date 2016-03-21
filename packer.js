@@ -3,11 +3,12 @@ var solver = require("javascript-lp-solver");
 "use strict";
 // ==============
 // Functions for solving the 2DSPP linear program.
+// My convention is to use T to denote the list of rectangle objects.
 // ==============
 module.exports = {
   /**
    * Solves the fractional rectangle packing problem and returns the solution.
-   * T - a list of rectangles (created by toRectangles())
+   * T - a list of rectangles objects
    */
   fractionalPacking: function (T) {
     var configurations = generateConfigurations(T);
@@ -73,7 +74,8 @@ function configurationPermutations(T, start, c, capacity, configurations) {
       c[i]--;
     }
   }
-  // No more rectangles can fit so add this as a configuration.
+  // If any rectangles have been used (capacity < 1) then add this as a valid
+  // configuration.
   if (capacity < 1 /*isLeaf*/) {
     configurations.push(c.slice());
   }
@@ -82,6 +84,8 @@ function configurationPermutations(T, start, c, capacity, configurations) {
 /**
  * Builds a linear program to solve the fractional rectangle problem given the
  * list of rectangles.
+ * Optionally accepts a set of configurations but will generate them itself if
+ * not given.
  */
 function buildLinearProgram(T, configurations) {
   if (typeof configurations === 'undefined') {
@@ -112,6 +116,12 @@ function buildLinearProgram(T, configurations) {
   return model;
 }
 
+/**
+ * Given a linear program model and a list of configurations, solves the linear
+ * program and returns an object consisting of the height of each configuration
+ * and which configuration it represents. (the corresponding element of
+ * configurations)
+ */
 function solveFractionalPackingLP(model, configurations) {
   var solution = solver.Solve(model);
   var packing = [];
